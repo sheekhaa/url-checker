@@ -17,17 +17,26 @@ export const checkWithBrowser = async (url: string) => {
     });
 
     const content = await page.content();
+    const blockedPatterns = [
+      "content isn't available",
+      "this page is missing",
+      "we looked everywhere",
+      "page not found",
+      "item not found",
+      "this listing has ended",
+      "no longer available",
+    ];
 
-    const blocked = content.toLowerCase().includes("content isn't available");
+    const blocked = blockedPatterns.some((p) =>
+      content.toLowerCase().includes(p),
+    );
 
     await browser.close();
 
     return {
       url,
       status: blocked ? 404 : 200,
-      message: blocked
-        ? "Not Available (Detected in Browser)"
-        : "Working (Browser Verified)",
+      message: blocked ? "Not Available (Detected in Browser)" : "Working",
     };
   } catch (err) {
     if (browser) await browser.close();

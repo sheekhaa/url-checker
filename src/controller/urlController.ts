@@ -7,7 +7,7 @@ import path from "path";
 export const checkUrlsController = async (req: Request, res: Response) => {
   try {
     const { fileName } = req.body;
-    const urls = readExcelFile(fileName);
+    const urls = readExcelFile(fileName).slice(0, 100);
 
     console.log("Total URLs:", urls.length);
 
