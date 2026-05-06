@@ -3,60 +3,42 @@ import { checkWithBrowser } from "../config/browserCheck";
 import { normalizeUrl } from "../utils/url";
 import pLimit from "p-limit";
 import { UrlData } from "../config/excelReader";
-
+import { handleEbayResponse, isEbayUrl } from "./ebayServices";
+import { handleFacebook, isFacebookUrl } from "./facebookServices";
+import { handleInstagram, isInstagramUrl } from "./instagramServices";
+import { handlePinterest, isPinterestUrl } from "./pinterestServices";
+import { handleTiktok, isTiktokUrl } from "./tiktokServies";
 interface Result {
   url: string;
   status: number;
   message: string;
 }
 
-// ─── Expanded blocked patterns (covers eBay, Instagram, Facebook, LinkedIn, etc.) ───
+// Generic blocked patterns (non-eBay only now)
 const BLOCKED_PATTERNS = [
-  // Generic not found
   "page not found",
   "page isn't available",
-  "page is not available",
   "this page is missing",
-  "we looked everywhere",
   "we can't find this page",
-  "couldn't find that page",
-  "the page you requested was not found",
-  "sorry, this page isn't available",
   "content isn't available",
-  "content is not available",
-  "this content isn't available",
-  "not available right now",
   "removed content",
   "no longer available",
   "this post is unavailable",
-  "this listing has ended", // eBay listing ended
-  "item not found", // eBay
-  "this item is no longer available",
-
-  // Soft 404s / error pages
   "404 - page not found",
   "error 404",
-  "hmm. we couldn't find that page",
-  "the link you followed may be broken",
   "nothing here",
   "looks like something went wrong",
 ];
 
-// ─── Age gate / login wall patterns (fake 200 but content is gated) ───
+// Login / age gate
 const GATED_PATTERNS = [
   "sign in to continue",
   "log in to continue",
   "please sign in",
   "you must be logged in",
   "login to view",
-  "you must be 18",
-  "age verification",
   "verify your age",
-  "this content is age-restricted",
-  "adults only",
-  "confirm your age",
-  "you need to be signed in",
-  "create an account to view",
+  "age-restricted",
 ];
 
 const checkPatterns = (text: string, patterns: string[]): boolean => {
@@ -79,10 +61,8 @@ const fetchWithTimeout = async (
       signal: controller.signal,
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
     });
     clearTimeout(timeout);
@@ -101,61 +81,78 @@ const checkSingleUrl = async (url: string): Promise<Result> => {
   }
 
   try {
-    // Step 1: Quick HEAD check to get the HTTP status code
+    // HEAD request
     let statusCode: number;
     try {
       const headRes = await fetchWithTimeout(url, "HEAD", timeoutMs);
       statusCode = headRes.status;
     } catch {
-      // HEAD not supported by some servers — fall through to GET
-      statusCode = 200; // assume ok, GET will validate
+      statusCode = 200;
     }
 
-    // Step 2: Hard HTTP errors — no need to fetch body
-    if (statusCode === 404) {
-      return { url, status: 404, message: "Not Found" };
-    }
-    if (statusCode === 410) {
+    // Hard errors
+    if (statusCode === 404) return { url, status: 404, message: "Not Found" };
+    if (statusCode === 410)
       return { url, status: 410, message: "Gone (Deleted)" };
-    }
-    if (statusCode >= 500) {
+    if (statusCode >= 500)
       return { url, status: statusCode, message: "Server Error" };
-    }
-    if (statusCode === 401) {
+    if (statusCode === 401)
       return { url, status: 401, message: "Unauthorized" };
-    }
 
-    // Step 3: For 200/301/302/403/400 — fetch GET body to detect fake 200s and gates
+    // GET request
     const getRes = await fetchWithTimeout(url, "GET", timeoutMs);
     const finalCode = getRes.status;
     const body = await getRes.text();
 
-    // Step 4: Check body for fake 404 pages (site returns 200 but shows error page)
+    if (isEbayUrl(url)) {
+      const ebayResult = handleEbayResponse(finalCode, body);
+      return {
+        url,
+        status: ebayResult.status,
+        message: ebayResult.message,
+      };
+    }
+    if (isFacebookUrl(url)) {
+      return await handleFacebook(url);
+    }
+
+    if (isInstagramUrl(url)) {
+      return await handleInstagram(url);
+    }
+    if (isPinterestUrl(url)) {
+      return await handlePinterest(url);
+    }
+
+    if (isTiktokUrl(url)) {
+      return await handleTiktok(url);
+    }
+    // Generic fake 404
     if (checkPatterns(body, BLOCKED_PATTERNS)) {
       return { url, status: 404, message: "Not Found (Page Error)" };
     }
 
-    // Step 5: Check for age gate or login wall (fake 200 but gated)
+    // Gated content
     if (checkPatterns(body, GATED_PATTERNS)) {
-      return { url, status: 403, message: "Gated (Age/Login Required)" };
+      return { url, status: 403, message: "Gated (Login Required)" };
     }
 
-    // Step 6: Classify by actual HTTP status
+    // Status handling
     if (finalCode >= 200 && finalCode < 300) {
       return { url, status: finalCode, message: "Working" };
     }
+
     if (finalCode >= 300 && finalCode < 400) {
       return { url, status: finalCode, message: "Redirect" };
     }
+
     if (finalCode === 403 || finalCode === 400) {
       return { url, status: finalCode, message: "Blocked" };
     }
-    if (finalCode === 404) {
-      return { url, status: 404, message: "Not Found" };
-    }
+
     if (finalCode >= 400 && finalCode < 500) {
       return { url, status: finalCode, message: "Client Error" };
     }
+
     if (finalCode >= 500) {
       return { url, status: finalCode, message: "Server Error" };
     }
@@ -171,7 +168,7 @@ const checkSingleUrl = async (url: string): Promise<Result> => {
 };
 
 export const processUrls = async (urls: UrlData[], sheet: any) => {
-  const limit = pLimit(2);
+  const limit = pLimit(1);
   let completed = 0;
   const chunks = createChunks(urls, 10);
 
@@ -187,9 +184,12 @@ export const processUrls = async (urls: UrlData[], sheet: any) => {
 
         let result = await checkSingleUrl(cleanUrl);
 
-        // Browser fallback: only for hard "Blocked" (403/400), not for gated pages
+        if (result.status === 500 || result.status === 0) {
+          console.log(`Retrying (browser error): ${cleanUrl}`);
+          result = await checkSingleUrl(cleanUrl);
+        }
+        // Browser fallback
         if (result.status === 403 && result.message === "Blocked") {
-          console.log(`Retrying with browser: ${cleanUrl}`);
           const browserResult = await checkWithBrowser(cleanUrl);
           if (browserResult.status === 200) {
             result = browserResult;
