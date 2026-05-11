@@ -3,11 +3,17 @@ import { checkWithBrowser } from "../config/browserCheck";
 import { normalizeUrl } from "../utils/url";
 import pLimit from "p-limit";
 import { UrlData } from "../config/excelReader";
-import { handleEbayResponse, isEbayUrl } from "./ebayServices";
-import { handleFacebook, isFacebookUrl } from "./facebookServices";
-import { handleInstagram, isInstagramUrl } from "./instagramServices";
-import { handlePinterest, isPinterestUrl } from "./pinterestServices";
-import { handleTiktok, isTiktokUrl } from "./tiktokServies";
+import { handleEbayResponse } from "./ebayServices";
+import { handleFacebook } from "./facebookServices";
+import { handleInstagram } from "./instagramServices";
+import { handlePinterest } from "./pinterestServices";
+import { handleTiktok } from "./tiktokServies";
+import { handleBazos } from "./bazosServices";
+import { handleTutti } from "./tuttiServices";
+import { handleAukro } from "./aukroServices";
+import { handleVinted } from "./vintedServices";
+import { detectPlatform } from "../utils/detectPlatform";
+import { handleFacebookMarketplace } from "./facebookMarketplace";
 interface Result {
   url: string;
   status: number;
@@ -104,27 +110,67 @@ const checkSingleUrl = async (url: string): Promise<Result> => {
     const finalCode = getRes.status;
     const body = await getRes.text();
 
-    if (isEbayUrl(url)) {
-      const ebayResult = handleEbayResponse(finalCode, body);
-      return {
-        url,
-        status: ebayResult.status,
-        message: ebayResult.message,
-      };
-    }
-    if (isFacebookUrl(url)) {
-      return await handleFacebook(url);
-    }
+    // if (isEbayUrl(url)) {
+    //   const ebayResult = handleEbayResponse(finalCode, body);
+    //   return {
+    //     url,
+    //     status: ebayResult.status,
+    //     message: ebayResult.message,
+    //   };
+    // }
+    // if (isFacebookUrl(url)) {
+    //   return await handleFacebook(url);
+    // }
 
-    if (isInstagramUrl(url)) {
-      return await handleInstagram(url);
-    }
-    if (isPinterestUrl(url)) {
-      return await handlePinterest(url);
-    }
+    // if (isInstagramUrl(url)) {
+    //   return await handleInstagram(url);
+    // }
+    // if (isPinterestUrl(url)) {
+    //   return await handlePinterest(url);
+    // }
 
-    if (isTiktokUrl(url)) {
-      return await handleTiktok(url);
+    // if (isTiktokUrl(url)) {
+    //   return await handleTiktok(url);
+    // }
+
+    const platform = detectPlatform(url);
+
+    switch (platform) {
+      case "facebook-marketplace":
+        return await handleFacebookMarketplace(url);
+      case "facebook":
+        return await handleFacebook(url);
+
+      case "instagram":
+        return await handleInstagram(url);
+
+      case "tiktok":
+        return await handleTiktok(url);
+
+      case "pinterest":
+        return await handlePinterest(url);
+
+      case "bazos":
+        return handleBazos(url, body);
+
+      case "tutti":
+        return handleTutti(url, body);
+
+      case "aukro":
+        return handleAukro(url, body);
+
+      case "vinted":
+        return await handleVinted(url);
+
+      case "ebay":
+        const ebayResult = handleEbayResponse(finalCode, body);
+        return {
+          url,
+          status: ebayResult.status,
+          message: ebayResult.message,
+        };
+      default:
+        break;
     }
     // Generic fake 404
     if (checkPatterns(body, BLOCKED_PATTERNS)) {
@@ -167,8 +213,70 @@ const checkSingleUrl = async (url: string): Promise<Result> => {
   }
 };
 
+// const checkSingleUrl = async (url: string): Promise<Result> => {
+//   const timeoutMs = 15000;
+
+//   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+
+//   try {
+//     const platform = detectPlatform(url);
+
+//     if (platform === "facebook-marketplace") {
+//       return await handleFacebookMarketplace(url);
+//     }
+//     if (platform === "facebook") {
+//       return await handleFacebook(url);
+//     }
+//     if (platform === "instagram") return await handleInstagram(url);
+
+//     if (platform === "tiktok") return await handleTiktok(url);
+//     if (platform === "pinterest") return await handlePinterest(url);
+//     if (platform === "vinted") return await handleVinted(url);
+
+//     // 2. Fetch for body-based platforms
+//     const res = await fetchWithTimeout(url, "GET", timeoutMs);
+//     const finalCode = res.status;
+//     const finalUrl = res.url; // <-- after redirects
+//     const body = await res.text();
+
+//     // if (platform === "bazos") return await handleBazos(url, body, finalUrl);
+//     // if (platform === "tutti") return handleTutti(url, body, finalUrl);
+//     // if (platform === "aukro") return handleAukro(url, body, finalUrl);
+
+//     if (platform === "ebay") {
+//       const r = handleEbayResponse(finalCode, body);
+//       return { url, status: r.status, message: r.message };
+//     }
+
+//     // 3. Generic fallbacks
+//     if (checkPatterns(body, BLOCKED_PATTERNS))
+//       return { url, status: 404, message: "Not Found" };
+//     if (checkPatterns(body, GATED_PATTERNS))
+//       return { url, status: 403, message: "Not Found" };
+
+//     if (finalCode >= 200 && finalCode < 300)
+//       return { url, status: finalCode, message: "Working" };
+//     if (finalCode >= 300 && finalCode < 400)
+//       return { url, status: finalCode, message: "Redirect" };
+//     if (finalCode === 403 || finalCode === 400)
+//       return { url, status: finalCode, message: "Blocked" };
+//     if (finalCode >= 400 && finalCode < 500)
+//       return { url, status: finalCode, message: "Client Error" };
+//     if (finalCode >= 500)
+//       return { url, status: finalCode, message: "Server Error" };
+
+//     return { url, status: finalCode, message: "Unknown" };
+//   } catch (err: any) {
+//     return {
+//       url,
+//       status: 0,
+//       message: err.name === "AbortError" ? "Timeout" : "Network Error",
+//     };
+//   }
+// };
+
 export const processUrls = async (urls: UrlData[], sheet: any) => {
-  const limit = pLimit(1);
+  const limit = pLimit(2);
   let completed = 0;
   const chunks = createChunks(urls, 10);
 

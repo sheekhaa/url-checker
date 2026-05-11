@@ -1,5 +1,3 @@
-// services/ebayService.ts
-
 interface EbayResult {
   status: number;
   message: string;
@@ -19,9 +17,13 @@ const EBAY_GATED_PATTERNS = [
   "please sign in",
 ];
 
-export const isEbayUrl = (url: string): boolean => {
-  return url.toLowerCase().includes("ebay.com");
-};
+const EBAY_SOFT_404_PATTERNS = [
+  "we looked everywhere",
+  "looks like this page is missing",
+  "page you're looking for is not available",
+  "this page is missing",
+  "the page you're looking for can't be found",
+];
 
 const checkPatterns = (text: string, patterns: string[]): boolean => {
   const lower = text.toLowerCase();
@@ -34,7 +36,6 @@ export const handleEbayResponse = (
 ): EbayResult => {
   const text = body.toLowerCase();
 
-  // Hard status handling
   if (statusCode === 404) {
     return { status: 404, message: "Not Found" };
   }
@@ -47,25 +48,25 @@ export const handleEbayResponse = (
     return { status: statusCode, message: "Server Error" };
   }
 
-  // Fake 404 detection
+  if (checkPatterns(text, EBAY_SOFT_404_PATTERNS)) {
+    return {
+      status: 404,
+      message: "Not Found",
+    };
+  }
+
   if (checkPatterns(text, EBAY_BLOCKED_PATTERNS)) {
     return {
       status: 404,
-      message: "Not Found (eBay Listing Removed)",
+      message: "Not Found",
     };
   }
 
-  // Gated / login required
   if (checkPatterns(text, EBAY_GATED_PATTERNS)) {
     return {
       status: 403,
-      message: "Gated (Login Required)",
+      message: "Not Found",
     };
-  }
-
-  // Success
-  if (statusCode >= 200 && statusCode < 300) {
-    return { status: statusCode, message: "Working" };
   }
 
   if (statusCode >= 300 && statusCode < 400) {
@@ -76,8 +77,8 @@ export const handleEbayResponse = (
     return { status: statusCode, message: "Blocked" };
   }
 
-  if (statusCode >= 400 && statusCode < 500) {
-    return { status: statusCode, message: "Client Error" };
+  if (statusCode >= 200 && statusCode < 300) {
+    return { status: statusCode, message: "Working" };
   }
 
   return { status: statusCode, message: "Unknown" };

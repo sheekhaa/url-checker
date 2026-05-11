@@ -1,56 +1,117 @@
 import puppeteer from "puppeteer";
 
-export const isTiktokUrl = (url: string): boolean => {
-  return url.toLowerCase().includes("tiktok.com");
-};
-
 export const handleTiktok = async (url: string) => {
   let browser;
 
   try {
     browser = await puppeteer.launch({
       headless: "shell",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-blink-features=AutomationControlled",
+      ],
     });
 
     const page = await browser.newPage();
 
     await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     );
+
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => false,
+      });
+    });
 
     await page.goto(url, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
 
-    await new Promise((r) => setTimeout(r, 6000));
+    await new Promise((r) => setTimeout(r, 8000));
 
-    const html = await page.content();
-    const text = html.toLowerCase();
+    const result = await page.evaluate(() => {
+      const text = document.body?.innerText?.toLowerCase() || "";
 
-    const loginWall =
-      text.includes("log in to continue") || text.includes("login to continue");
+      const sigi = (window as any).SIGI_STATE;
+      const isDeadText =
+        text.includes("video unavailable") ||
+        text.includes("this video is unavailable") ||
+        text.includes("couldn't find this account") ||
+        text.includes("page not available");
+      text.includes("Something went wrong") ||
+        text.includes("Sorry about that! Please try again later");
+      if (isDeadText) {
+        return {
+          status: 404,
+          message: "Not Found",
+        };
+      }
 
-    if (loginWall) {
-      return { url, status: 403, message: "Login Required" };
-    }
+      try {
+        if (sigi?.ItemModule) {
+          const keys = Object.keys(sigi.ItemModule);
 
-    if (url.includes("/photo/")) {
-      return { url, status: 200, message: "Working" };
-    }
+          if (keys.length > 0) {
+            const item = sigi.ItemModule[keys[0]];
 
-    const isDead =
-      text.includes("this video is unavailable") && text.includes("tiktok");
+            if (item?.statusCode === 10204 || item?.statusCode === 10222) {
+              return {
+                status: 404,
+                message: "Video Removed",
+              };
+            }
+          }
+        }
+      } catch {}
 
-    if (isDead) {
-      return { url, status: 404, message: "Video Removed" };
-    }
+      const hasVideo =
+        !!document.querySelector("video") ||
+        !!document.querySelector('[data-e2e="video-player"]');
 
-    return { url, status: 200, message: "Working" };
+      const hasImages = document.querySelectorAll("img").length > 3;
+
+      const hasMeta =
+        !!document.querySelector('meta[property="og:url"]') ||
+        !!document.querySelector('meta[property="og:title"]');
+
+      const hasContent = hasVideo || hasImages || hasMeta;
+
+      const loginWall =
+        (text.includes("log in") || text.includes("sign up")) && !hasContent;
+
+      if (loginWall && !hasMeta) {
+        return {
+          status: 404,
+          message: "Working",
+        };
+      }
+
+      if (!hasContent) {
+        return {
+          status: 200,
+          message: "Working",
+        };
+      }
+
+      return {
+        status: 200,
+        message: "Working",
+      };
+    });
+
+    return { url, ...result };
   } catch (err) {
-    return { url, status: 500, message: "Browser Error" };
+    return {
+      url,
+      status: 500,
+      message: "Browser Error",
+    };
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 };

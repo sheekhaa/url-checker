@@ -2,12 +2,11 @@ import { Request, Response } from "express";
 import { readExcelFile } from "../config/excelReader";
 import { processUrls } from "../services/urlServices";
 import { createExcelStream } from "../utils/exportExcel";
-import path from "path";
 
 export const checkUrlsController = async (req: Request, res: Response) => {
   try {
     const { fileName } = req.body;
-    const urls = readExcelFile(fileName).slice(0, 50);
+    const urls = readExcelFile(fileName);
 
     console.log("Total URLs:", urls.length);
 

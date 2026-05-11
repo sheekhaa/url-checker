@@ -1,9 +1,5 @@
 import puppeteer from "puppeteer";
 
-export const isPinterestUrl = (url: string): boolean => {
-  return url.toLowerCase().includes("pinterest.com");
-};
-
 export const handlePinterest = async (url: string) => {
   let browser;
 
@@ -24,7 +20,6 @@ export const handlePinterest = async (url: string) => {
       timeout: 30000,
     });
 
-    // wait for JS rendering
     await new Promise((r) => setTimeout(r, 4000));
 
     const html = await page.content();
@@ -42,13 +37,6 @@ export const handlePinterest = async (url: string) => {
       return { url, status: 404, message: "Not found" };
     }
 
-    // const isGated =
-    //   text.includes("log in") ||
-    //   text.includes("sign up") ||
-    //   text.includes("continue with f+acebook") ||
-    //   text.includes("pinterest");
-
-    // Pinterest often always mentions "log in", so we keep it softer
     const strongGate = text.includes("log in") && text.includes("save ideas");
 
     if (strongGate) {

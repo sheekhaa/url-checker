@@ -11,109 +11,56 @@ export const checkWithBrowser = async (url: string) => {
 
     const page = await browser.newPage();
 
-    await page.goto(url, {
-      waitUntil: "networkidle2",
-      timeout: 20000,
-    });
-
-    const content = await page.content();
-    const blockedPatterns = [
-      "content isn't available",
-      "this page is missing",
-      "we looked everywhere",
-      "page not found",
-      "item not found",
-      "this listing has ended",
-      "no longer available",
-    ];
-
-    const blocked = blockedPatterns.some((p) =>
-      content.toLowerCase().includes(p),
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36",
     );
 
-    await browser.close();
+    await page.goto(url, {
+      waitUntil: "networkidle2",
+      timeout: 30000,
+    });
+
+    // wait for dynamic content
+    await new Promise((r) => setTimeout(r, 5000));
+
+    const text = await page.evaluate(() => {
+      return document.body?.innerText || "";
+    });
+
+    const lower = text.toLowerCase();
+
+    const blockedPatterns = [
+      "this page isn't available",
+      "this content isn't available",
+      "content isn't available",
+      "page isn't available",
+      "not available right now",
+      "may have been removed",
+      "link you followed may be broken",
+      "item is no longer available",
+      "listing not found",
+      "video unavailable",
+    ];
+
+    const isBlocked = blockedPatterns.some((p) => lower.includes(p));
+
+    // extra safety (empty page)
+    const isEmpty = lower.trim().length < 50;
+
+    const finalBlocked = isBlocked || isEmpty;
 
     return {
       url,
-      status: blocked ? 404 : 200,
-      message: blocked ? "Not Available (Detected in Browser)" : "Working",
+      status: finalBlocked ? 404 : 200,
+      message: finalBlocked ? "Not Available" : "Working",
     };
   } catch (err) {
-    if (browser) await browser.close();
-
     return {
       url,
       status: 500,
       message: "Browser Error",
     };
+  } finally {
+    if (browser) await browser.close();
   }
 };
-
-// export const checkWithBrowser = async (url: string) => {
-//   let browser;
-
-//   try {
-//     browser = await puppeteer.launch({
-//       headless: "shell",
-//       args: ["--no-sandbox", "--disable-setuid-sandbox"],
-//     });
-
-//     const page = await browser.newPage();
-
-//     await page.goto(url, {
-//       waitUntil: "networkidle2",
-//       timeout: 30000,
-//     });
-
-//     // WAIT for full render
-//     await new Promise((r) => setTimeout(r, 3000));
-//     const content = await page.evaluate(() => {
-//       return document.body?.innerText || "";
-//     });
-
-//     const data = await page.evaluate(() => {
-//       return {
-//         text: document.body?.innerText || "",
-//         html: document.documentElement?.innerHTML || "",
-//       };
-//     });
-
-//     const text = (data.text + " " + data.html).toLowerCase();
-
-//     const blockedPatterns = [
-//       "this page isn't available",
-//       "this content isn't available",
-//       "content isn't available",
-//       "page isn't available",
-//       "page is not available",
-//       "may have been removed",
-//       "broken link",
-//       "not available right now",
-//       "page may have been removed",
-//       "the link you followed may be broken",
-//     ];
-
-//     const isBlocked = blockedPatterns.some((p) => text.includes(p));
-
-//     const isEmpty =
-//       data.text.trim().length < 40 && text.includes("facebook") === false;
-
-//     const finalBlocked = isBlocked || isEmpty;
-
-//     await browser.close();
-
-//     return {
-//       url,
-//       status: finalBlocked ? 404 : 200,
-//       message: finalBlocked ? "Not Available" : "Working",
-//     };
-//   } catch (err) {
-//     if (browser) await browser.close();
-
-//     return {
-//       url,
-//       status: 500,
-//       message: "Browser Error",
-//     };
-//   }
-// };
