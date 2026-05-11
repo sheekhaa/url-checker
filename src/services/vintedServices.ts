@@ -1,4 +1,4 @@
-import { createPage } from "../utils/browser";
+import puppeteer from "puppeteer";
 
 interface Result {
   url: string;
@@ -7,9 +7,16 @@ interface Result {
 }
 
 export const handleVinted = async (url: string): Promise<Result> => {
-  const { browser, page } = await createPage();
+  let browser;
 
   try {
+    browser = await puppeteer.launch({
+      headless: "shell",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+
+    const page = await browser.newPage();
+
     await page.goto(url, {
       waitUntil: "networkidle2",
       timeout: 60000,
@@ -43,7 +50,7 @@ export const handleVinted = async (url: string): Promise<Result> => {
       return {
         url,
         status: 403,
-        message: "Not found ",
+        message: "Not Found",
       };
     }
 
@@ -59,6 +66,6 @@ export const handleVinted = async (url: string): Promise<Result> => {
       message: "Browser Error",
     };
   } finally {
-    await browser.close();
+    if (browser) await browser.close();
   }
 };
