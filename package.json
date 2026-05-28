@@ -11,7 +11,7 @@
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "p-limit": "^7.3.0",
-    "puppeteer": "^24.42.0",
+    "puppeteer": "^24.43.1",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "xlsx": "^0.18.5"

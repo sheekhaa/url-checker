@@ -15,35 +15,36 @@ export const handleInstagram = async (url: string) => {
 
     const page = await browser.newPage();
 
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-    );
-
-    // Hide webdriver
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, "webdriver", {
-        get: () => false,
-      });
-    });
-
     await page.goto(url, {
       waitUntil: "networkidle2",
       timeout: 60000,
     });
 
-    // allow React hydration
     await new Promise((r) => setTimeout(r, 8000));
 
     const finalUrl = page.url().toLowerCase();
 
     const result = await page.evaluate((finalUrl) => {
-      const text = document.body?.innerText?.toLowerCase() || "";
+      const text = (document.body?.innerText || "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
 
-      const isDead =
-        text.includes("sorry, this page isn't available") ||
-        text.includes("post isn't available") ||
-        text.includes("user not found") ||
-        text.includes("link you followed may be broken");
+      const deadPatterns = [
+        "sorry, this page isn't available",
+        "page isn't available",
+        "post isn't available",
+        "user not found",
+        "link you followed may be broken",
+        "content unavailable",
+        "this account is private",
+        "the page may have been removed",
+        "photo unavailable",
+        "video unavailable",
+        "reel unavailable",
+      ];
+
+      const isDead = deadPatterns.some((p) => text.includes(p));
 
       if (isDead) {
         return {
@@ -52,10 +53,17 @@ export const handleInstagram = async (url: string) => {
         };
       }
 
-      const isBlocked =
-        text.includes("help us confirm") ||
-        text.includes("suspicious activity") ||
-        text.includes("temporarily blocked");
+      const blockedPatterns = [
+        "help us confirm",
+        "suspicious activity",
+        "temporarily blocked",
+        "challenge_required",
+        "confirm your identity",
+        "security check",
+        "captcha",
+      ];
+
+      const isBlocked = blockedPatterns.some((p) => text.includes(p));
 
       if (isBlocked) {
         return {
@@ -64,32 +72,56 @@ export const handleInstagram = async (url: string) => {
         };
       }
 
-      if (finalUrl.includes("/accounts/login")) {
-        return {
-          status: 200,
-          message: "Working (Login Protected)",
-        };
-      }
+      const loginPatterns = ["log in", "sign up", "login", "password"];
+
+      const isLoginWall =
+        finalUrl.includes("/accounts/login") ||
+        loginPatterns.some((p) => text.includes(p));
 
       const hasArticle = !!document.querySelector("article");
 
-      const hasMedia =
-        document.querySelectorAll("img").length > 2 ||
-        document.querySelectorAll("video").length > 0;
+      const hasImages = document.querySelectorAll("img").length > 3;
 
-      const hasButtons =
-        !!document.querySelector('svg[aria-label="Like"]') ||
-        !!document.querySelector('svg[aria-label="Comment"]');
+      const hasVideo = document.querySelectorAll("video").length > 0;
 
-      if (hasArticle || hasMedia || hasButtons) {
+      const hasMetaDescription = !!document.querySelector(
+        'meta[property="og:description"]',
+      );
+
+      const hasUsername =
+        !!document.querySelector("header section") ||
+        !!document.querySelector("header h2");
+
+      const hasLikeButton = !!document.querySelector('svg[aria-label="Like"]');
+
+      const repeatedInstagram = (text.match(/instagram/g) || []).length > 25;
+
+      const hasRealContent =
+        (hasArticle ||
+          hasVideo ||
+          hasLikeButton ||
+          hasMetaDescription ||
+          hasUsername) &&
+        hasImages &&
+        !repeatedInstagram;
+
+      if (isLoginWall && hasRealContent) {
         return {
           status: 200,
-          message: "Working",
+          message: "Still Active",
         };
       }
+
+      if (hasRealContent) {
+        return {
+          status: 200,
+          message: "Still Active",
+        };
+      }
+
       return {
-        status: 200,
-        message: "Working (Weak Detection)",
+        status: 404,
+        message: "Not Found",
       };
     }, finalUrl);
 
@@ -98,6 +130,8 @@ export const handleInstagram = async (url: string) => {
       ...result,
     };
   } catch (err) {
+    console.log(err);
+
     return {
       url,
       status: 500,

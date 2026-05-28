@@ -20,7 +20,6 @@ export const checkWithBrowser = async (url: string) => {
       timeout: 30000,
     });
 
-    // wait for dynamic content
     await new Promise((r) => setTimeout(r, 5000));
 
     const text = await page.evaluate(() => {
@@ -44,7 +43,7 @@ export const checkWithBrowser = async (url: string) => {
 
     const isBlocked = blockedPatterns.some((p) => lower.includes(p));
 
-    // extra safety (empty page)
+    //empty page
     const isEmpty = lower.trim().length < 50;
 
     const finalBlocked = isBlocked || isEmpty;
@@ -52,7 +51,7 @@ export const checkWithBrowser = async (url: string) => {
     return {
       url,
       status: finalBlocked ? 404 : 200,
-      message: finalBlocked ? "Not Available" : "Working",
+      message: finalBlocked ? "Not Available" : "Still Active",
     };
   } catch (err) {
     return {

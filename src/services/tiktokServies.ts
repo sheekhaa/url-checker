@@ -26,24 +26,33 @@ export const handleTiktok = async (url: string) => {
     });
 
     await page.goto(url, {
-      waitUntil: "domcontentloaded",
+      waitUntil: "networkidle2",
       timeout: 60000,
     });
 
-    await new Promise((r) => setTimeout(r, 8000));
+    await new Promise((r) => setTimeout(r, 6000));
 
     const result = await page.evaluate(() => {
       const text = document.body?.innerText?.toLowerCase() || "";
 
       const sigi = (window as any).SIGI_STATE;
-      const isDeadText =
-        text.includes("video unavailable") ||
-        text.includes("this video is unavailable") ||
-        text.includes("couldn't find this account") ||
-        text.includes("page not available");
-      text.includes("Something went wrong") ||
-        text.includes("Sorry about that! Please try again later");
-      if (isDeadText) {
+
+      const deadTexts = [
+        "video unavailable",
+        "video currently unavailable",
+        "this video is unavailable",
+        "couldn't find this account",
+        "page not available",
+        "something went wrong",
+        "sorry about that",
+        "unable to load",
+        "content unavailable",
+        "this page is not available",
+      ];
+
+      const hasDeadText = deadTexts.some((t) => text.includes(t));
+
+      if (hasDeadText) {
         return {
           status: 404,
           message: "Not Found",
@@ -63,6 +72,12 @@ export const handleTiktok = async (url: string) => {
                 message: "Video Removed",
               };
             }
+
+            // valid item found
+            return {
+              status: 200,
+              message: "Still Active",
+            };
           }
         }
       } catch {}
@@ -71,38 +86,32 @@ export const handleTiktok = async (url: string) => {
         !!document.querySelector("video") ||
         !!document.querySelector('[data-e2e="video-player"]');
 
-      const hasImages = document.querySelectorAll("img").length > 3;
-
-      const hasMeta =
-        !!document.querySelector('meta[property="og:url"]') ||
-        !!document.querySelector('meta[property="og:title"]');
-
-      const hasContent = hasVideo || hasImages || hasMeta;
-
-      const loginWall =
-        (text.includes("log in") || text.includes("sign up")) && !hasContent;
-
-      if (loginWall && !hasMeta) {
+      if (hasVideo) {
         return {
-          status: 404,
-          message: "Working",
+          status: 200,
+          message: "Still Active",
         };
       }
 
-      if (!hasContent) {
+      const loginWall = text.includes("log in") || text.includes("sign up");
+
+      if (loginWall && !hasVideo) {
         return {
-          status: 200,
-          message: "Working",
+          status: 404,
+          message: "Unavailable",
         };
       }
 
       return {
-        status: 200,
-        message: "Working",
+        status: 404,
+        message: "Not Found",
       };
     });
 
-    return { url, ...result };
+    return {
+      url,
+      ...result,
+    };
   } catch (err) {
     return {
       url,

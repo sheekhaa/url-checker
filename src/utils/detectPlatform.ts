@@ -10,7 +10,14 @@ export const detectPlatform = (url: string): string => {
   if (u.includes("bazos.cz") || u.includes("bazos.sk")) return "bazos";
   if (u.includes("tutti.ch")) return "tutti";
   if (u.includes("aukro.cz")) return "aukro";
-  if (u.includes("vinted.")) return "vinted";
+  if (
+    u.includes("vinted.") ||
+    u.includes("Vinted.lv") ||
+    u.includes("Vinted.de") ||
+    u.includes("vinted.pl") ||
+    u.includes("Vinted.hu")
+  )
+    return "vinted";
   if (u.includes("ebay.") || u.includes("ebay.co.uk")) return "ebay";
 
   return "unknown";

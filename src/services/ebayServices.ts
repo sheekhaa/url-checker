@@ -78,7 +78,7 @@ export const handleEbayResponse = (
   }
 
   if (statusCode >= 200 && statusCode < 300) {
-    return { status: statusCode, message: "Working" };
+    return { status: statusCode, message: "Still Active" };
   }
 
   return { status: statusCode, message: "Unknown" };

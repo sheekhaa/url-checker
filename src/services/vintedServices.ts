@@ -57,7 +57,7 @@ export const handleVinted = async (url: string): Promise<Result> => {
     return {
       url,
       status: 200,
-      message: "Working",
+      message: "Still Active",
     };
   } catch (err) {
     return {

@@ -61,8 +61,6 @@ export const handleFacebookMarketplace = async (url: string) => {
         .trim();
     });
 
-    console.log("FB MARKETPLACE TEXT:", text.slice(0, 2000));
-
     const deadPatterns = [
       "this listing isn't available anymore",
       "listing isn't available anymore",
@@ -108,7 +106,7 @@ export const handleFacebookMarketplace = async (url: string) => {
     return {
       url,
       status: 200,
-      message: "Working",
+      message: "Still Active",
     };
   } catch (err) {
     return {

@@ -43,7 +43,7 @@ export const handlePinterest = async (url: string) => {
       return { url, status: 403, message: "Not found" };
     }
 
-    return { url, status: 200, message: "Working" };
+    return { url, status: 200, message: "Still Active" };
   } catch (err) {
     return { url, status: 500, message: "Browser Error" };
   } finally {
